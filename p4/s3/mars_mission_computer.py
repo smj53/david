@@ -44,7 +44,7 @@ class DummySensor:
 
     def get_env(self):
         self.set_env()
-        return self.env_values
+        return self.env_values.copy()
 
 
 # 문제 2
@@ -65,22 +65,28 @@ class MissionComputer:
     # 문제 3
     def get_mission_computer_info1(self):
         # 운영체계, 운영체계 버전, CPU의 타입, CPU의 코어 수, 메모리의 크기
-        infos = {
-            'os': platform.system(),
-            'os version': platform.release(),
-            'cpu type': platform.machine(),
-            'cpu core count': psutil.cpu_count(),
-            'memory size': psutil.virtual_memory().total,
-        }
+        try:
+            infos = {
+                'os': platform.system(),
+                'os version': platform.release(),
+                'cpu type': platform.machine(),
+                'cpu core count': psutil.cpu_count(),
+                'memory size': psutil.virtual_memory().total,
+            }
+        except Exception as e:
+            infos = {'error': str(e)}
         self.print_json('computer info', infos)
 
     def get_mission_computer_load1(self):
         # CPU 실시간 사용량, 메모리 실시간 사용량
-        memory_dict = dict(psutil.virtual_memory()._asdict())
-        infos = {
-            'cpu runtime usage': psutil.cpu_percent(),
-            'memory runtime usage': memory_dict['percent'],
-        }
+        try:
+            memory_dict = dict(psutil.virtual_memory()._asdict())
+            infos = {
+                'cpu runtime usage': psutil.cpu_percent(),
+                'memory runtime usage': memory_dict['percent'],
+            }
+        except Exception as e:
+            infos = {'error': str(e)}
         self.print_json('cpu, memory info', infos)
 
     # 문제 4
@@ -92,24 +98,30 @@ class MissionComputer:
 
     def get_mission_computer_info(self, lock):
         while True:
-            infos = {
-                'os': platform.system(),
-                'os version': platform.release(),
-                'cpu type': platform.machine(),
-                'cpu core count': psutil.cpu_count(),
-                'memory size': psutil.virtual_memory().total,
-            }
+            try:
+                infos = {
+                    'os': platform.system(),
+                    'os version': platform.release(),
+                    'cpu type': platform.machine(),
+                    'cpu core count': psutil.cpu_count(),
+                    'memory size': psutil.virtual_memory().total,
+                }
+            except Exception as e:
+                infos = {'error': str(e)}
             self.print_json_lock('computer info', infos, lock)
             time.sleep(self.cpu_print_seconds)
 
     def get_mission_computer_load(self, lock):
         # CPU 실시간 사용량, 메모리 실시간 사용량
         while True:
-            memory_dict = dict(psutil.virtual_memory()._asdict())
-            infos = {
-                'cpu runtime usage': psutil.cpu_percent(),
-                'memory runtime usage': memory_dict['percent'],
-            }
+            try:
+                memory_dict = dict(psutil.virtual_memory()._asdict())
+                infos = {
+                    'cpu runtime usage': psutil.cpu_percent(),
+                    'memory runtime usage': memory_dict['percent'],
+                }
+            except Exception as e:
+                infos = {'error': str(e)}
             self.print_json_lock('cpu, memory info', infos, lock)
             time.sleep(self.cpu_print_seconds)
 
@@ -217,15 +229,20 @@ def prob4():
 
 
 if __name__ == '__main__':
-    option = input('select probrom #: ')
-    match option:
-        case '1':
-            prob1()
-        case '2':
-            prob2()
-        case '3':
-            prob3()
-        case '4':
-            prob4()
-        case _:
-            pass
+    try:
+        option = input('select problem #: ')
+        match option:
+            case '1':
+                prob1()
+            case '2':
+                prob2()
+            case '3':
+                prob3()
+            case '4':
+                prob4()
+            case _:
+                pass
+    except Exception as e:
+        print('에러:', e)
+    except KeyboardInterrupt:
+        print('System stoped….')
