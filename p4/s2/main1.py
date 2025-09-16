@@ -10,7 +10,7 @@ def csv_to_list(filename):
     with open(filename, 'r') as f:
         content = f.read()
         print(content)
-    with open(filename, 'r') as f:
+        f.seek(0)
         read = csv.reader(f)
         next(read)
         return list(read)
