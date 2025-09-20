@@ -64,6 +64,8 @@ def try_open(path, part, queue, event):
                 if check_password(zf, password):
                     event.set()
                     print('found: ', password)
+                    with zipfile.ZipFile(path, 'r') as zip_ref:
+                        zip_ref.extractall(pwd=password)
                     queue.put(attempts)
                     return
                 now = time.time()
