@@ -156,12 +156,15 @@ class Calculator:
         self.result = 0
         self.display = '0'
         self.operator = None
+        self.after_equal = False
         self.status = Calculator.Status.START
 
     def set_number(self, number):
-        print(self.status.name)
         match self.status:
             case Calculator.Status.START | Calculator.Status.NEXT:
+                if self.after_equal:
+                    self.display = '0'
+                    self.after_equal = False
                 if self.display == '0':
                     self.display = number
                 else:
@@ -177,6 +180,9 @@ class Calculator:
         try:
             match self.status:
                 case Calculator.Status.START | Calculator.Status.NEXT:
+                    if self.after_equal:
+                        self.display = '0'
+                        self.after_equal = False
                     self.unary[op]()
                 case Calculator.Status.OP:
                     self.unary[op]()
@@ -189,7 +195,7 @@ class Calculator:
         except OverflowError:
             self.display = 'Overflow'
             self.status = Calculator.Status.ERROR
-        except Exception:
+        except Exception as e:
             self.display = 'Error'
             self.status = Calculator.Status.ERROR
 
@@ -213,7 +219,7 @@ class Calculator:
         except OverflowError:
             self.display = 'Overflow'
             self.status = Calculator.Status.ERROR
-        except Exception:
+        except Exception as e:
             self.display = 'Error'
             self.status = Calculator.Status.ERROR
 
@@ -229,6 +235,7 @@ class Calculator:
                     self.operator = None
                     self.prev = 0
                     self.status = Calculator.Status.START
+                    self.after_equal = True
                 case Calculator.Status.ERROR:
                     self.reset()
         except ValueError as e:
@@ -237,7 +244,7 @@ class Calculator:
         except OverflowError:
             self.display = 'Overflow'
             self.status = Calculator.Status.ERROR
-        except Exception:
+        except Exception as e:
             self.display = 'Error'
             self.status = Calculator.Status.ERROR
 
