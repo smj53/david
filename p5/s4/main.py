@@ -1,102 +1,137 @@
-import zipfile
 import os
+import zipfile
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
+
+import cv2
+from ultralytics import YOLO
+import torch
 
 
 def unzip():
     local_zip = 'cctv.zip'
-    zip_ref = zipfile.ZipFile(local_zip, 'r')
-    zip_ref.extractall('cctv')
-    zip_ref.close()
-
+    if not os.path.exists(local_zip):
+        print('zip 파일이 없습니다:', local_zip)
+        return
+    with zipfile.ZipFile(local_zip, 'r') as zf:
+        zf.extractall('cctv')
     print(f"Unzipped files to {os.path.abspath('cctv')}")
 
 
 def show_images():
-    img_dir = 'cctv'
-    img_files = sorted([f for f in os.listdir(img_dir) if f.endswith('.jpg')])
+    """(Optional) 이미지 미리보기. 좌우 화살표로 이동, q 종료."""
+    # matplotlib.use('TkAgg')  # Ensure interactive backend (optional depending on env)
 
+    img_dir = 'cctv'
+    if not os.path.isdir(img_dir):
+        print('디렉토리 없음:', img_dir)
+        return
+    img_files = sorted([f for f in os.listdir(img_dir) if f.lower().endswith('.jpg')])
     if not img_files:
-        print("No images found!")
+        print('이미지 없음')
         return
 
-    current_idx = 0
+    idx = 0
+    fig, ax = plt.subplots(figsize=(10, 6))
+    fig.canvas.manager.set_window_title('Image Preview')
 
-    fig, ax = plt.subplots(figsize=(12, 8))
-
-    def show_current_image():
+    def render():
         ax.clear()
-        img_path = os.path.join(img_dir, img_files[current_idx])
-        img = mpimg.imread(img_path)
-        ax.imshow(img)
+        path = os.path.join(img_dir, img_files[idx])
+        ax.imshow(mpimg.imread(path))
+        ax.set_title(f'{img_files[idx]} ({idx+1}/{len(img_files)})')
         ax.axis('off')
-        ax.set_title(
-            f'{img_files[current_idx]} ({current_idx + 1}/{len(img_files)})',
-            fontsize=14,
-            pad=20,
-        )
-        plt.tight_layout()
         fig.canvas.draw()
 
     def on_key(event):
-        nonlocal current_idx
-
-        if event.key in ['right', 'd']:
-            current_idx = (current_idx + 1) % len(img_files)
-            show_current_image()
-        elif event.key in ['left', 'a']:
-            current_idx = (current_idx - 1) % len(img_files)
-            show_current_image()
-        elif event.key == 'q' or event.key == 'escape':
+        nonlocal idx
+        if event.key in ('right', 'd'):
+            idx = (idx + 1) % len(img_files)
+            render()
+        elif event.key in ('left', 'a'):
+            idx = (idx - 1) % len(img_files)
+            render()
+        elif event.key in ('q', 'escape'):
             plt.close(fig)
 
-    # 키보드 이벤트 연결
     fig.canvas.mpl_connect('key_press_event', on_key)
-
-    # 첫 번째 이미지 표시
-    show_current_image()
-
+    render()
     plt.show()
 
 
-def find_human():
-    import cv2
-    import numpy as np
-
+def find_human_yolo(conf_threshold: float = 0.25, iou_threshold: float = 0.45):
+    """YOLOv8 기반 사람(person class=0) 탐지 및 시각화."""
     img_dir = 'cctv'
-    img_files = sorted([f for f in os.listdir(img_dir) if f.endswith('.jpg')])
+    if not os.path.isdir(img_dir):
+        print('디렉토리 없음:', img_dir)
+        return
+    img_files = sorted([f for f in os.listdir(img_dir) if f.lower().endswith('.jpg')])
+    if not img_files:
+        print('이미지 없음')
+        return
 
-    # HOG 사람 검출기 초기화
-    hog = cv2.HOGDescriptor()
-    hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+    try:
+        model = YOLO('yolov8n.pt')  # 첫 실행 시 다운로드
+    except Exception as e:
+        print('YOLO 모델 로드 실패:', e)
+        return
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    if device == 'cpu':
+        print('[알림] GPU 미사용(CPU). 처음은 느릴 수 있습니다.')
 
     for img_file in img_files:
-        img_path = os.path.join(img_dir, img_file)
-        image = cv2.imread(img_path)
-
+        path = os.path.join(img_dir, img_file)
+        image = cv2.imread(path)
         if image is None:
-            print(f"Failed to load image {img_path}")
+            print('로드 실패:', path)
             continue
 
-        # 이미지 크기 조정 (너무 큰 이미지는 처리 속도 저하)
-        scale_percent = 60  # 이미지 크기를 60%로 줄임
-        width = int(image.shape[1] * scale_percent / 100)
-        height = int(image.shape[0] * scale_percent / 100)
-        dim = (width, height)
-        image = cv2.resize(image, dim, interpolation=cv2.INTER_AREA)
+        try:
+            results = model.predict(
+                source=image,
+                classes=[0],  # person only
+                conf=conf_threshold,
+                iou=iou_threshold,
+                verbose=False,
+                device=device,
+            )
+        except Exception as e:
+            print(f'[{img_file}] 추론 실패:', e)
+            continue
 
-        # 사람 검출
-        boxes, weights = hog.detectMultiScale(image, winStride=(8, 8))
-        print(f"Detected {len(boxes)} humans in {img_file}")
-        # 검출된 사람 주위에 사각형 그리기
-        for x, y, w, h in boxes:
-            cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        if not results:
+            print(f'[{img_file}] 결과 없음')
+            continue
 
-        # 결과 이미지 표시
-        cv2.imshow('Human Detection', image)
+        r = results[0]
+        boxes = r.boxes
+        vis = image.copy()
+        count = 0
+        if boxes is not None and len(boxes) > 0:
+            for b in boxes:
+                xyxy = b.xyxy[0].int()
+                x1, y1, x2, y2 = xyxy.tolist()
+                conf = float(b.conf.item()) if b.conf is not None else 0.0
+                if conf < conf_threshold:
+                    continue
+                count += 1
+                cv2.rectangle(vis, (x1, y1), (x2, y2), (0, 200, 0), 2)
+                cv2.putText(
+                    vis,
+                    f'person {conf:.2f}',
+                    (x1, max(12, y1 - 6)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 200, 0),
+                    1,
+                    cv2.LINE_AA,
+                )
+        print(f'[{img_file}] 사람 검출 {count}개')
+        cv2.imshow('YOLO Person Detection', vis)
         key = cv2.waitKey(0) & 0xFF
-        if key == ord('q') or key == 27:  # 'q' 또는 'ESC' 키를 누르면 종료
+        if key in (ord('q'), 27):  # q or ESC
             break
 
     cv2.destroyAllWindows()
@@ -105,5 +140,4 @@ def find_human():
 if __name__ == "__main__":
     unzip()
     show_images()
-
-    find_human()
+    find_human_yolo(conf_threshold=0.2)
