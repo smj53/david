@@ -81,7 +81,7 @@ def transcribe_with_timestamps(filename):
     model = whisper.load_model('base')
     result = model.transcribe(real_path, word_timestamps=True)
 
-    with open(f'{real_path[:real_path.rfind(".")]}.CSV', 'w') as f:
+    with open(f'{real_path[:real_path.rfind(".")]}.CSV', 'w', encoding='UTF8') as f:
         f.write('start,end,text\n')
         for segment in result['segments']:
             print(f'{segment['start']:.2f}s - {segment['end']:.2f}s: {segment['text']}')
